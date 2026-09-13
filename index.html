@@ -586,13 +586,14 @@
         <summary class="cat-summary">
           <div>
             <div class="cat-title">Wines</div>
-            <div class="cat-note">Priced per bottle · complimentary bottles apply at 12, 18, 24 &amp; 30 bottles</div>
+            <div class="cat-note">Priced per bottle · every 12/18/24/30 bottles purchased (combined across all wines) earns 3/4/7/10 complimentary — the complimentary bottle can be any label, even one not otherwise ordered</div>
           </div>
           <div class="cat-right">
             <span class="cat-badge">0 bottles</span>
             <span class="chevron"></span>
           </div>
         </summary>
+        <div class="foc-status" id="wineFocStatus" style="display:none;"></div>
         <div class="cat-body" data-items></div>
       </details>
 
@@ -648,9 +649,13 @@
         <div class="summary-sub">Service charge and GST are compounded, as billed on the guest invoice.</div>
 
         <div class="sum-row"><span class="label">Subtotal</span><span class="value" id="sSubtotal">$0.00</span></div>
+        <div class="sum-row discount" id="sWineDiscountRow" style="display:none;">
+          <span class="label" id="sWineDiscountLabel">Complimentary wine bottles</span>
+          <span class="value">No charge</span>
+        </div>
         <div class="sum-row discount" id="sDiscountRow" style="display:none;">
           <span class="label" id="sDiscountLabel">Complimentary canapé sets</span>
-          <span class="value" id="sDiscountValue">–$0.00</span>
+          <span class="value" id="sDiscountValue">No charge</span>
         </div>
         <div class="sum-row"><span class="label">Service Charge (10%)</span><span class="value" id="sService">$0.00</span></div>
         <div class="sum-row"><span class="label">Subtotal incl. Service Charge</span><span class="value" id="sAfterService">$0.00</span></div>
@@ -749,17 +754,64 @@ const CAT_UNIT_LABEL = {
 const fmt = n => "$" + n.toLocaleString("en-SG", {minimumFractionDigits:2, maximumFractionDigits:2});
 
 // Wine complimentary-bottle schedule (from the wine list preference table).
-// The couple is charged for the quantity purchased; complimentary bottles
-// are given in addition, on top of that quantity.
-function wineComplimentary(qty){
-  if (qty >= 30) return 10;
-  if (qty >= 24) return 7;
-  if (qty >= 18) return 4;
-  if (qty >= 12) return 3;
+// Eligibility is based on the TOTAL bottles purchased across all wine
+// labels combined — the specific bottle(s) marked complimentary are then
+// freely chosen (see the FOC tracking below), independent of which label
+// was actually purchased.
+function wineComplimentary(totalBottles){
+  if (totalBottles >= 30) return 10;
+  if (totalBottles >= 24) return 7;
+  if (totalBottles >= 18) return 4;
+  if (totalBottles >= 12) return 3;
   return 0;
 }
 function wineMeta(item){
   return `${fmt(item.price)} per bottle`;
+}
+
+/* ---------------- Complimentary wine bottle tracking ---------------- */
+const wineFocState = {};        // itemId -> assigned complimentary bottles
+const wineRowVisualUpdaters = {}; // itemId -> function to refresh that row's display
+
+function getWineItemIds(){
+  return CATALOGUE.wines.map((_, idx) => itemId("wines", idx));
+}
+function totalWineBottlesOrdered(){
+  return getWineItemIds().reduce((s,id)=> s + getQtyValue(id), 0);
+}
+function totalWineFocAssigned(){
+  return getWineItemIds().reduce((s,id)=> s + (wineFocState[id] || 0), 0);
+}
+function wineFreeCapacity(){
+  return wineComplimentary(totalWineBottlesOrdered());
+}
+function enforceWineCapacity(){
+  const capacity = wineFreeCapacity();
+  let assigned = totalWineFocAssigned();
+  if (assigned <= capacity) return;
+  const ids = getWineItemIds();
+  for (let i = ids.length - 1; i >= 0 && assigned > capacity; i--){
+    const f = wineFocState[ids[i]] || 0;
+    if (f <= 0) continue;
+    const reduceBy = Math.min(f, assigned - capacity);
+    wineFocState[ids[i]] = f - reduceBy;
+    assigned -= reduceBy;
+  }
+}
+function refreshAllWineVisuals(){
+  Object.values(wineRowVisualUpdaters).forEach(fn => fn());
+}
+function updateWineCapacityStatus(){
+  const el = document.getElementById("wineFocStatus");
+  if (!el) return;
+  const capacity = wineFreeCapacity();
+  const assigned = totalWineFocAssigned();
+  if (capacity === 0){ el.style.display = "none"; return; }
+  el.style.display = "block";
+  el.classList.toggle("complete", assigned >= capacity);
+  el.textContent = assigned >= capacity
+    ? `✓ ${assigned} of ${capacity} complimentary bottle${capacity>1?"s":""} assigned`
+    : `${assigned} of ${capacity} complimentary bottle${capacity>1?"s":""} assigned — tap “+” on a wine below to mark it complimentary`;
 }
 
 /* ---------------- Complimentary canapé set tracking ---------------- */
@@ -822,6 +874,8 @@ Object.keys(CATALOGUE).forEach(cat=>{
     const id = itemId(cat, idx);
     const isWine = cat === "wines";
     const isCanape = cat === "canapes";
+    const hasFoc = isWine || isCanape;
+    if (isWine) wineFocState[id] = 0;
     if (isCanape) canapeFocState[id] = 0;
 
     const row = document.createElement("div");
@@ -830,7 +884,7 @@ Object.keys(CATALOGUE).forEach(cat=>{
       <div class="item-info">
         <div class="item-name">${item.name}</div>
         <div class="item-meta">${isWine ? wineMeta(item) : fmt(item.price) + " " + item.unit}</div>
-        ${(isWine || isCanape) ? `<div class="item-comp" data-comp style="display:none;"></div>` : ``}
+        ${hasFoc ? `<div class="item-comp" data-comp style="display:none;"></div>` : ``}
       </div>
       <div class="item-controls">
         <div class="qty-stepper">
@@ -838,7 +892,7 @@ Object.keys(CATALOGUE).forEach(cat=>{
           <input type="number" min="0" step="1" value="0" data-qty id="${id}">
           <button type="button" data-action="inc">+</button>
         </div>
-        ${isCanape ? `
+        ${hasFoc ? `
         <div class="foc-widget" data-foc-widget>
           <span class="foc-tag">FOC</span>
           <button type="button" data-foc-action="dec">–</button>
@@ -881,23 +935,35 @@ Object.keys(CATALOGUE).forEach(cat=>{
     }
     if (isCanape) canapeRowVisualUpdaters[id] = updateCanapeVisual;
 
+    function updateWineVisual(){
+      const q = parseInt(qtyInput.value, 10) || 0;
+      const f = wineFocState[id] || 0;
+      const capacity = wineFreeCapacity();
+      const amount = q * item.price;
+      totalEl.textContent = fmt(amount);
+      totalEl.classList.toggle("zero", q === 0 && f === 0);
+      if (focWrap) focWrap.style.display = (capacity > 0 || f > 0) ? "flex" : "none";
+      if (focCountEl) focCountEl.textContent = f;
+      if (f > 0){
+        compEl.style.display = "block";
+        const totalBottles = q + f;
+        compEl.textContent = q > 0
+          ? `+${f} complimentary bottle${f>1?"s":""} at no charge · ${totalBottles} bottles total (${q} paid)`
+          : `+${f} complimentary bottle${f>1?"s":""} at no charge`;
+      } else if (compEl){
+        compEl.style.display = "none";
+      }
+    }
+    if (isWine) wineRowVisualUpdaters[id] = updateWineVisual;
+
     function refreshLine(){
       let q = parseInt(qtyInput.value, 10);
       if (isNaN(q) || q < 0) q = 0;
       qtyInput.value = q;
 
       if (isWine){
-        const comp = wineComplimentary(q);
-        const totalReceived = q + comp;
-        const t = q * item.price;
-        totalEl.textContent = fmt(t);
-        totalEl.classList.toggle("zero", q === 0);
-        if (comp > 0){
-          compEl.style.display = "block";
-          compEl.textContent = `Complimentary: ${comp} bottle${comp>1?"s":""} · ${totalReceived} bottles total, charged for ${q}`;
-        } else {
-          compEl.style.display = "none";
-        }
+        enforceWineCapacity();
+        refreshAllWineVisuals();
       } else if (isCanape){
         enforceCanapeCapacity();
         refreshAllCanapeVisuals();
@@ -925,6 +991,19 @@ Object.keys(CATALOGUE).forEach(cat=>{
         if (f < maxAllowed){ canapeFocState[id] = f + 1; updateCanapeVisual(); recalc(); }
       });
     }
+    if (isWine){
+      focDec.addEventListener("click", ()=>{
+        const f = wineFocState[id] || 0;
+        if (f > 0){ wineFocState[id] = f - 1; updateWineVisual(); recalc(); }
+      });
+      focInc.addEventListener("click", ()=>{
+        const f = wineFocState[id] || 0;
+        const capacity = wineFreeCapacity();
+        const assignedOthers = totalWineFocAssigned() - f;
+        const maxAllowed = capacity - assignedOthers;
+        if (f < maxAllowed){ wineFocState[id] = f + 1; updateWineVisual(); recalc(); }
+      });
+    }
   });
 });
 
@@ -950,25 +1029,15 @@ function collectItems(){
     CATALOGUE[cat].forEach((item, idx)=>{
       const id = itemId(cat, idx);
       const q = parseInt(document.getElementById(id).value, 10) || 0;
-      const foc = (cat === "canapes") ? (canapeFocState[id] || 0) : 0;
+      const foc = (cat === "wines") ? (wineFocState[id] || 0)
+                : (cat === "canapes") ? (canapeFocState[id] || 0)
+                : 0;
       if (q === 0 && foc === 0) return;
 
-      if (cat === "wines"){
-        const comp = wineComplimentary(q);
-        const totalReceived = q + comp;
-        const amount = q * item.price;
-        items.push({
-          cat, name:item.name, price:item.price, qty:q,
-          comp, totalReceived, grossAmount: amount, lineTotal: amount
-        });
-      } else if (cat === "canapes"){
-        const amount = q * item.price;
-        items.push({
-          cat, name:item.name, price:item.price, qty:q,
-          foc, grossAmount: amount, lineTotal: amount
-        });
+      const amount = q * item.price;
+      if (cat === "wines" || cat === "canapes"){
+        items.push({ cat, name:item.name, price:item.price, qty:q, foc, grossAmount: amount, lineTotal: amount });
       } else {
-        const amount = q * item.price;
         items.push({ cat, name:item.name, price:item.price, qty:q, grossAmount: amount, lineTotal: amount });
       }
     });
@@ -980,9 +1049,10 @@ function recalc(){
   updateBadges();
   const items = collectItems();
   const rawSubtotal = items.reduce((s,i)=>s+i.grossAmount, 0);
-  const subtotal = rawSubtotal; // canapé FOC sets are bonus items, not a reduction on what's charged
-  const focCount = items.filter(i=>i.cat==="canapes").reduce((s,i)=>s+(i.foc||0), 0);
-  const focValue = items.filter(i=>i.cat==="canapes").reduce((s,i)=>s+((i.foc||0)*i.price), 0);
+  const subtotal = rawSubtotal; // FOC bottles/sets are bonus items, not a reduction on what's charged
+  const wineFocCount = items.filter(i=>i.cat==="wines").reduce((s,i)=>s+(i.foc||0), 0);
+  const canapeFocCount = items.filter(i=>i.cat==="canapes").reduce((s,i)=>s+(i.foc||0), 0);
+  const focValue = items.reduce((s,i)=> s + ((i.foc||0)*i.price), 0);
 
   const service = subtotal * 0.10;
   const afterService = subtotal + service;
@@ -990,22 +1060,33 @@ function recalc(){
   const grand = afterService + gst;
 
   document.getElementById("sSubtotal").textContent = fmt(rawSubtotal);
+
+  const wineDiscountRow = document.getElementById("sWineDiscountRow");
+  if (wineFocCount > 0){
+    wineDiscountRow.style.display = "flex";
+    document.getElementById("sWineDiscountLabel").textContent = `Complimentary wine bottle${wineFocCount>1?"s":""} included (${wineFocCount})`;
+  } else {
+    wineDiscountRow.style.display = "none";
+  }
+
   const discountRow = document.getElementById("sDiscountRow");
-  if (focCount > 0){
+  if (canapeFocCount > 0){
     discountRow.style.display = "flex";
-    document.getElementById("sDiscountLabel").textContent = `Complimentary canapé set${focCount>1?"s":""} included (${focCount})`;
+    document.getElementById("sDiscountLabel").textContent = `Complimentary canapé set${canapeFocCount>1?"s":""} included (${canapeFocCount})`;
     document.getElementById("sDiscountValue").textContent = "No charge";
   } else {
     discountRow.style.display = "none";
   }
+
   document.getElementById("sService").textContent = fmt(service);
   document.getElementById("sAfterService").textContent = fmt(afterService);
   document.getElementById("sGst").textContent = fmt(gst);
   document.getElementById("sGrand").textContent = fmt(grand);
 
   updateCanapeCapacityStatus();
+  updateWineCapacityStatus();
 
-  return { items, rawSubtotal, freeSets: focCount, discount: focValue, subtotal, service, afterService, gst, grand };
+  return { items, rawSubtotal, freeSets: canapeFocCount, freeBottles: wineFocCount, discount: focValue, subtotal, service, afterService, gst, grand };
 }
 
 /* ---------------- Banner ---------------- */
@@ -1197,19 +1278,25 @@ function printRecord(rec){
   tbody.innerHTML = "";
   rec.items.forEach(it=>{
     const tr = document.createElement("tr");
-    const nameCell = (it.cat === "wines" && it.comp > 0)
-      ? `${it.name}<br><span style="font-size:11px;color:#6B5F57;font-style:italic;">Complimentary: ${it.comp} bottle${it.comp>1?"s":""} · ${it.totalReceived} bottles total, charged for ${it.qty}</span>`
+    const nameCell = (it.cat === "wines" && it.foc > 0)
+      ? `${it.name}<br><span style="font-size:11px;color:#6B5F57;font-style:italic;">+${it.foc} complimentary bottle${it.foc>1?"s":""} at no charge${it.qty>0 ? ` · ${it.qty+it.foc} bottles total (${it.qty} paid)` : ""}</span>`
       : (it.cat === "canapes" && it.foc > 0)
       ? `${it.name}<br><span style="font-size:11px;color:#6B5F57;font-style:italic;">+${it.foc} complimentary set${it.foc>1?"s":""} at no charge${it.qty>0 ? ` · ${it.qty+it.foc} sets total (${it.qty} paid)` : ""}</span>`
       : it.name;
-    const qtyCell = (it.cat === "canapes") ? (it.qty + (it.foc||0)) : it.qty;
+    const qtyCell = (it.cat === "wines" || it.cat === "canapes") ? (it.qty + (it.foc||0)) : it.qty;
     tr.innerHTML = `<td>${nameCell}</td><td>${qtyCell}</td><td class="r">${fmt(it.price)}</td><td class="r">${fmt(it.lineTotal)}</td>`;
     tbody.appendChild(tr);
   });
 
+  const wineFocCount = rec.items.filter(i=>i.cat==="wines").reduce((s,i)=>s+(i.foc||0), 0);
+  const canapeFocCount = rec.items.filter(i=>i.cat==="canapes").reduce((s,i)=>s+(i.foc||0), 0);
+
   let totalsHtml = `<div><span>Subtotal</span><span>${fmt(rec.rawSubtotal)}</span></div>`;
-  if (rec.freeSets > 0){
-    totalsHtml += `<div><span>Complimentary canapé set${rec.freeSets>1?"s":""} included</span><span>No charge</span></div>`;
+  if (wineFocCount > 0){
+    totalsHtml += `<div><span>Complimentary wine bottle${wineFocCount>1?"s":""} included</span><span>No charge</span></div>`;
+  }
+  if (canapeFocCount > 0){
+    totalsHtml += `<div><span>Complimentary canapé set${canapeFocCount>1?"s":""} included</span><span>No charge</span></div>`;
   }
   totalsHtml += `<div><span>Service Charge (10%)</span><span>${fmt(rec.service)}</span></div>`;
   totalsHtml += `<div><span>Subtotal incl. Service Charge</span><span>${fmt(rec.afterService)}</span></div>`;
@@ -1247,7 +1334,9 @@ function newOrder(){
   document.getElementById("refPreview").textContent = "1H-XXXXXX";
   document.querySelectorAll("[data-qty]").forEach(inp=>{ inp.value = 0; inp.dispatchEvent(new Event("input")); });
   Object.keys(canapeFocState).forEach(id => canapeFocState[id] = 0);
+  Object.keys(wineFocState).forEach(id => wineFocState[id] = 0);
   refreshAllCanapeVisuals();
+  refreshAllWineVisuals();
   recalc();
   showBanner("Started a new order.", "success");
 }
