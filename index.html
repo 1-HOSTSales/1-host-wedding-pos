@@ -628,7 +628,7 @@
         <summary class="cat-summary">
           <div>
             <div class="cat-title">Canapés</div>
-            <div class="cat-note">$250 per set of 30 pieces · every 3 sets earns 1 complimentary, every 5 earns 2 — mark which dish is complimentary below</div>
+            <div class="cat-note">$250 per set of 30 pieces · every 3 sets purchased earns 1 complimentary, every 5 earns 2 — the complimentary dish can be any item, even one not otherwise ordered</div>
           </div>
           <div class="cat-right">
             <span class="cat-badge">0 sets</span>
@@ -863,15 +863,18 @@ Object.keys(CATALOGUE).forEach(cat=>{
     function updateCanapeVisual(){
       const q = parseInt(qtyInput.value, 10) || 0;
       const f = canapeFocState[id] || 0;
-      const chargeable = Math.max(0, q - f);
-      const net = chargeable * item.price;
-      totalEl.textContent = fmt(net);
-      totalEl.classList.toggle("zero", q === 0);
-      if (focWrap) focWrap.style.display = q > 0 ? "flex" : "none";
+      const capacity = canapeFreeCapacity(totalCanapeSetsOrdered());
+      const amount = q * item.price;
+      totalEl.textContent = fmt(amount);
+      totalEl.classList.toggle("zero", q === 0 && f === 0);
+      if (focWrap) focWrap.style.display = (capacity > 0 || f > 0) ? "flex" : "none";
       if (focCountEl) focCountEl.textContent = f;
       if (f > 0){
         compEl.style.display = "block";
-        compEl.textContent = `Complimentary: ${f} set${f>1?"s":""} · charged for ${chargeable}`;
+        const totalSets = q + f;
+        compEl.textContent = q > 0
+          ? `+${f} complimentary set${f>1?"s":""} at no charge · ${totalSets} sets total (${q} paid)`
+          : `+${f} complimentary set${f>1?"s":""} at no charge`;
       } else if (compEl){
         compEl.style.display = "none";
       }
@@ -896,7 +899,6 @@ Object.keys(CATALOGUE).forEach(cat=>{
           compEl.style.display = "none";
         }
       } else if (isCanape){
-        if ((canapeFocState[id] || 0) > q) canapeFocState[id] = q;
         enforceCanapeCapacity();
         refreshAllCanapeVisuals();
       } else {
@@ -916,11 +918,10 @@ Object.keys(CATALOGUE).forEach(cat=>{
         if (f > 0){ canapeFocState[id] = f - 1; updateCanapeVisual(); recalc(); }
       });
       focInc.addEventListener("click", ()=>{
-        const q = parseInt(qtyInput.value, 10) || 0;
         const f = canapeFocState[id] || 0;
         const capacity = canapeFreeCapacity(totalCanapeSetsOrdered());
         const assignedOthers = totalCanapeFocAssigned() - f;
-        const maxAllowed = Math.min(q, capacity - assignedOthers);
+        const maxAllowed = capacity - assignedOthers;
         if (f < maxAllowed){ canapeFocState[id] = f + 1; updateCanapeVisual(); recalc(); }
       });
     }
@@ -949,7 +950,8 @@ function collectItems(){
     CATALOGUE[cat].forEach((item, idx)=>{
       const id = itemId(cat, idx);
       const q = parseInt(document.getElementById(id).value, 10) || 0;
-      if (q === 0) return;
+      const foc = (cat === "canapes") ? (canapeFocState[id] || 0) : 0;
+      if (q === 0 && foc === 0) return;
 
       if (cat === "wines"){
         const comp = wineComplimentary(q);
@@ -960,11 +962,10 @@ function collectItems(){
           comp, totalReceived, grossAmount: amount, lineTotal: amount
         });
       } else if (cat === "canapes"){
-        const foc = canapeFocState[id] || 0;
-        const chargeable = Math.max(0, q - foc);
+        const amount = q * item.price;
         items.push({
           cat, name:item.name, price:item.price, qty:q,
-          foc, chargeable, grossAmount: q*item.price, lineTotal: chargeable*item.price
+          foc, grossAmount: amount, lineTotal: amount
         });
       } else {
         const amount = q * item.price;
@@ -979,9 +980,9 @@ function recalc(){
   updateBadges();
   const items = collectItems();
   const rawSubtotal = items.reduce((s,i)=>s+i.grossAmount, 0);
-  const subtotal = items.reduce((s,i)=>s+i.lineTotal, 0);
-  const discount = rawSubtotal - subtotal;
+  const subtotal = rawSubtotal; // canapé FOC sets are bonus items, not a reduction on what's charged
   const focCount = items.filter(i=>i.cat==="canapes").reduce((s,i)=>s+(i.foc||0), 0);
+  const focValue = items.filter(i=>i.cat==="canapes").reduce((s,i)=>s+((i.foc||0)*i.price), 0);
 
   const service = subtotal * 0.10;
   const afterService = subtotal + service;
@@ -992,8 +993,8 @@ function recalc(){
   const discountRow = document.getElementById("sDiscountRow");
   if (focCount > 0){
     discountRow.style.display = "flex";
-    document.getElementById("sDiscountLabel").textContent = `Complimentary canapé sets (–${focCount})`;
-    document.getElementById("sDiscountValue").textContent = "–" + fmt(discount);
+    document.getElementById("sDiscountLabel").textContent = `Complimentary canapé set${focCount>1?"s":""} included (${focCount})`;
+    document.getElementById("sDiscountValue").textContent = "No charge";
   } else {
     discountRow.style.display = "none";
   }
@@ -1004,7 +1005,7 @@ function recalc(){
 
   updateCanapeCapacityStatus();
 
-  return { items, rawSubtotal, freeSets: focCount, discount, subtotal, service, afterService, gst, grand };
+  return { items, rawSubtotal, freeSets: focCount, discount: focValue, subtotal, service, afterService, gst, grand };
 }
 
 /* ---------------- Banner ---------------- */
@@ -1199,16 +1200,16 @@ function printRecord(rec){
     const nameCell = (it.cat === "wines" && it.comp > 0)
       ? `${it.name}<br><span style="font-size:11px;color:#6B5F57;font-style:italic;">Complimentary: ${it.comp} bottle${it.comp>1?"s":""} · ${it.totalReceived} bottles total, charged for ${it.qty}</span>`
       : (it.cat === "canapes" && it.foc > 0)
-      ? `${it.name}<br><span style="font-size:11px;color:#6B5F57;font-style:italic;">Complimentary: ${it.foc} set${it.foc>1?"s":""} · charged for ${it.chargeable}</span>`
+      ? `${it.name}<br><span style="font-size:11px;color:#6B5F57;font-style:italic;">+${it.foc} complimentary set${it.foc>1?"s":""} at no charge${it.qty>0 ? ` · ${it.qty+it.foc} sets total (${it.qty} paid)` : ""}</span>`
       : it.name;
-    const qtyCell = it.qty;
+    const qtyCell = (it.cat === "canapes") ? (it.qty + (it.foc||0)) : it.qty;
     tr.innerHTML = `<td>${nameCell}</td><td>${qtyCell}</td><td class="r">${fmt(it.price)}</td><td class="r">${fmt(it.lineTotal)}</td>`;
     tbody.appendChild(tr);
   });
 
   let totalsHtml = `<div><span>Subtotal</span><span>${fmt(rec.rawSubtotal)}</span></div>`;
   if (rec.freeSets > 0){
-    totalsHtml += `<div><span>Complimentary canapé sets (–${rec.freeSets})</span><span>–${fmt(rec.discount)}</span></div>`;
+    totalsHtml += `<div><span>Complimentary canapé set${rec.freeSets>1?"s":""} included</span><span>No charge</span></div>`;
   }
   totalsHtml += `<div><span>Service Charge (10%)</span><span>${fmt(rec.service)}</span></div>`;
   totalsHtml += `<div><span>Subtotal incl. Service Charge</span><span>${fmt(rec.afterService)}</span></div>`;
