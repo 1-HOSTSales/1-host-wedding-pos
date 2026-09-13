@@ -864,6 +864,29 @@ function makeRef(){
   return "1H-" + d.getFullYear() + pad(d.getMonth()+1) + pad(d.getDate()) + "-" + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds());
 }
 
+/* ---------------- Storage (browser localStorage) ---------------- */
+// Persists saved orders in this browser, on this device. Works on any
+// static host (GitHub Pages, a local file, etc.) — no server required.
+const storage = {
+  async set(key, value){
+    try{ localStorage.setItem(key, value); return { key, value }; }
+    catch(e){ return null; }
+  },
+  async get(key){
+    const value = localStorage.getItem(key);
+    if (value === null) throw new Error("Key not found: " + key);
+    return { key, value };
+  },
+  async delete(key){
+    localStorage.removeItem(key);
+    return { key, deleted:true };
+  },
+  async list(prefix){
+    const keys = Object.keys(localStorage).filter(k => k.startsWith(prefix));
+    return { keys };
+  }
+};
+
 /* ---------------- Save / History ---------------- */
 async function saveOrder(){
   const couple = document.getElementById("coupleName").value.trim();
@@ -891,7 +914,7 @@ async function saveOrder(){
   };
 
   try{
-    const result = await window.storage.set("order:" + ref, JSON.stringify(record), false);
+    const result = await storage.set("order:" + ref, JSON.stringify(record));
     if (!result){ showBanner("Could not save the order — please try again.", "error"); return; }
     showBanner(`Order ${ref} saved for ${couple}.`, "success");
     document.getElementById("refPreview").textContent = ref;
@@ -905,7 +928,7 @@ async function loadHistory(){
   const wrap = document.getElementById("historyWrap");
   wrap.innerHTML = '<div class="empty-note">Loading saved orders…</div>';
   try{
-    const listRes = await window.storage.list("order:", false);
+    const listRes = await storage.list("order:");
     const keys = (listRes && listRes.keys) ? listRes.keys : [];
     if (keys.length === 0){
       wrap.innerHTML = '<div class="empty-note">No orders saved yet — orders you save will appear here for billing.</div>';
@@ -914,7 +937,7 @@ async function loadHistory(){
     const records = [];
     for (const k of keys){
       try{
-        const r = await window.storage.get(k, false);
+        const r = await storage.get(k);
         if (r && r.value) records.push(JSON.parse(r.value));
       }catch(e){ /* skip unreadable key */ }
     }
@@ -955,8 +978,7 @@ async function loadHistory(){
     tbody.querySelectorAll('[data-act="del"]').forEach(btn=>{
       btn.addEventListener("click", async ()=>{
         try{
-          const g = await window.storage.get("order:" + btn.dataset.ref, false);
-          await window.storage.delete("order:" + btn.dataset.ref, false);
+          await storage.delete("order:" + btn.dataset.ref);
           showBanner(`Order ${btn.dataset.ref} deleted.`, "success");
           await loadHistory();
         }catch(e){ showBanner("Could not delete this order.", "error"); }
