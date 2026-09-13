@@ -269,6 +269,54 @@
   }
   .line-total.zero{ color:#C7BDB2; }
 
+  .foc-widget{
+    display:none;
+    align-items:center;
+    gap:8px;
+    border:1px solid var(--good);
+    border-radius:20px;
+    padding:3px 4px 3px 10px;
+    flex-shrink:0;
+  }
+  .foc-tag{
+    font-size:10.5px;
+    letter-spacing:.08em;
+    color:var(--good);
+    font-weight:500;
+  }
+  .foc-widget button{
+    width:22px;height:22px;
+    border:none;
+    border-radius:50%;
+    background:#EBF1E8;
+    color:var(--good);
+    font-size:13px;
+    cursor:pointer;
+    line-height:1;
+  }
+  .foc-widget button:hover{ background:#DCEAD6; }
+  .foc-count{
+    min-width:14px;
+    text-align:center;
+    font-size:13px;
+    color:var(--good);
+    font-variant-numeric:tabular-nums;
+  }
+  .foc-status{
+    margin:0 22px 10px;
+    padding:9px 14px;
+    border-radius:3px;
+    font-size:12.5px;
+    background:#FBF1E1;
+    color:#8A6A2F;
+    border:1px solid #EFDBB0;
+  }
+  .foc-status.complete{
+    background:#EBF1E8;
+    color:#3E5C3B;
+    border-color:#CBDFC5;
+  }
+
   /* ---------- Summary ---------- */
   .summary-card{
     position:sticky;
@@ -580,13 +628,14 @@
         <summary class="cat-summary">
           <div>
             <div class="cat-title">Canapés</div>
-            <div class="cat-note">$250 per set of 30 pieces · every 3 sets earns 1 complimentary, every 5 earns 2</div>
+            <div class="cat-note">$250 per set of 30 pieces · every 3 sets earns 1 complimentary, every 5 earns 2 — mark which dish is complimentary below</div>
           </div>
           <div class="cat-right">
             <span class="cat-badge">0 sets</span>
             <span class="chevron"></span>
           </div>
         </summary>
+        <div class="foc-status" id="canapeFocStatus" style="display:none;"></div>
         <div class="cat-body" data-items></div>
       </details>
 
@@ -713,6 +762,57 @@ function wineMeta(item){
   return `${fmt(item.price)} per bottle`;
 }
 
+/* ---------------- Complimentary canapé set tracking ---------------- */
+const canapeFocState = {};       // itemId -> assigned complimentary sets
+const canapeRowVisualUpdaters = {}; // itemId -> function to refresh that row's display
+
+function canapeFreeCapacity(totalSets){
+  if (totalSets >= 5) return 2;
+  if (totalSets >= 3) return 1;
+  return 0;
+}
+function getCanapeItemIds(){
+  return CATALOGUE.canapes.map((_, idx) => itemId("canapes", idx));
+}
+function getQtyValue(id){
+  const el = document.getElementById(id);
+  return el ? (parseInt(el.value, 10) || 0) : 0;
+}
+function totalCanapeSetsOrdered(){
+  return getCanapeItemIds().reduce((s,id)=> s + getQtyValue(id), 0);
+}
+function totalCanapeFocAssigned(){
+  return getCanapeItemIds().reduce((s,id)=> s + (canapeFocState[id] || 0), 0);
+}
+function enforceCanapeCapacity(){
+  const capacity = canapeFreeCapacity(totalCanapeSetsOrdered());
+  let assigned = totalCanapeFocAssigned();
+  if (assigned <= capacity) return;
+  const ids = getCanapeItemIds();
+  for (let i = ids.length - 1; i >= 0 && assigned > capacity; i--){
+    const f = canapeFocState[ids[i]] || 0;
+    if (f <= 0) continue;
+    const reduceBy = Math.min(f, assigned - capacity);
+    canapeFocState[ids[i]] = f - reduceBy;
+    assigned -= reduceBy;
+  }
+}
+function refreshAllCanapeVisuals(){
+  Object.values(canapeRowVisualUpdaters).forEach(fn => fn());
+}
+function updateCanapeCapacityStatus(){
+  const el = document.getElementById("canapeFocStatus");
+  if (!el) return;
+  const capacity = canapeFreeCapacity(totalCanapeSetsOrdered());
+  const assigned = totalCanapeFocAssigned();
+  if (capacity === 0){ el.style.display = "none"; return; }
+  el.style.display = "block";
+  el.classList.toggle("complete", assigned >= capacity);
+  el.textContent = assigned >= capacity
+    ? `✓ ${assigned} of ${capacity} complimentary set${capacity>1?"s":""} assigned`
+    : `${assigned} of ${capacity} complimentary set${capacity>1?"s":""} assigned — tap “+” on a dish below to mark it complimentary`;
+}
+
 /* ---------------- Build item rows ---------------- */
 function itemId(cat, idx){ return cat + "__" + idx; }
 
@@ -721,13 +821,16 @@ Object.keys(CATALOGUE).forEach(cat=>{
   CATALOGUE[cat].forEach((item, idx)=>{
     const id = itemId(cat, idx);
     const isWine = cat === "wines";
+    const isCanape = cat === "canapes";
+    if (isCanape) canapeFocState[id] = 0;
+
     const row = document.createElement("div");
     row.className = "item-row";
     row.innerHTML = `
       <div class="item-info">
         <div class="item-name">${item.name}</div>
         <div class="item-meta">${isWine ? wineMeta(item) : fmt(item.price) + " " + item.unit}</div>
-        ${isWine ? `<div class="item-comp" data-comp style="display:none;"></div>` : ``}
+        ${(isWine || isCanape) ? `<div class="item-comp" data-comp style="display:none;"></div>` : ``}
       </div>
       <div class="item-controls">
         <div class="qty-stepper">
@@ -735,6 +838,13 @@ Object.keys(CATALOGUE).forEach(cat=>{
           <input type="number" min="0" step="1" value="0" data-qty id="${id}">
           <button type="button" data-action="inc">+</button>
         </div>
+        ${isCanape ? `
+        <div class="foc-widget" data-foc-widget>
+          <span class="foc-tag">FOC</span>
+          <button type="button" data-foc-action="dec">–</button>
+          <span class="foc-count" data-foc-count>0</span>
+          <button type="button" data-foc-action="inc">+</button>
+        </div>` : ``}
         <div class="line-total zero" data-total>${fmt(0)}</div>
       </div>
     `;
@@ -745,6 +855,28 @@ Object.keys(CATALOGUE).forEach(cat=>{
     const compEl = row.querySelector("[data-comp]");
     const dec = row.querySelector('[data-action="dec"]');
     const inc = row.querySelector('[data-action="inc"]');
+    const focWrap = row.querySelector('[data-foc-widget]');
+    const focCountEl = row.querySelector('[data-foc-count]');
+    const focDec = row.querySelector('[data-foc-action="dec"]');
+    const focInc = row.querySelector('[data-foc-action="inc"]');
+
+    function updateCanapeVisual(){
+      const q = parseInt(qtyInput.value, 10) || 0;
+      const f = canapeFocState[id] || 0;
+      const chargeable = Math.max(0, q - f);
+      const net = chargeable * item.price;
+      totalEl.textContent = fmt(net);
+      totalEl.classList.toggle("zero", q === 0);
+      if (focWrap) focWrap.style.display = q > 0 ? "flex" : "none";
+      if (focCountEl) focCountEl.textContent = f;
+      if (f > 0){
+        compEl.style.display = "block";
+        compEl.textContent = `Complimentary: ${f} set${f>1?"s":""} · charged for ${chargeable}`;
+      } else if (compEl){
+        compEl.style.display = "none";
+      }
+    }
+    if (isCanape) canapeRowVisualUpdaters[id] = updateCanapeVisual;
 
     function refreshLine(){
       let q = parseInt(qtyInput.value, 10);
@@ -763,6 +895,10 @@ Object.keys(CATALOGUE).forEach(cat=>{
         } else {
           compEl.style.display = "none";
         }
+      } else if (isCanape){
+        if ((canapeFocState[id] || 0) > q) canapeFocState[id] = q;
+        enforceCanapeCapacity();
+        refreshAllCanapeVisuals();
       } else {
         const t = q * item.price;
         totalEl.textContent = fmt(t);
@@ -773,6 +909,21 @@ Object.keys(CATALOGUE).forEach(cat=>{
     dec.addEventListener("click", ()=>{ qtyInput.value = Math.max(0, (parseInt(qtyInput.value,10)||0) - 1); refreshLine(); });
     inc.addEventListener("click", ()=>{ qtyInput.value = (parseInt(qtyInput.value,10)||0) + 1; refreshLine(); });
     qtyInput.addEventListener("input", refreshLine);
+
+    if (isCanape){
+      focDec.addEventListener("click", ()=>{
+        const f = canapeFocState[id] || 0;
+        if (f > 0){ canapeFocState[id] = f - 1; updateCanapeVisual(); recalc(); }
+      });
+      focInc.addEventListener("click", ()=>{
+        const q = parseInt(qtyInput.value, 10) || 0;
+        const f = canapeFocState[id] || 0;
+        const capacity = canapeFreeCapacity(totalCanapeSetsOrdered());
+        const assignedOthers = totalCanapeFocAssigned() - f;
+        const maxAllowed = Math.min(q, capacity - assignedOthers);
+        if (f < maxAllowed){ canapeFocState[id] = f + 1; updateCanapeVisual(); recalc(); }
+      });
+    }
   });
 });
 
@@ -796,18 +947,28 @@ function collectItems(){
   const items = [];
   Object.keys(CATALOGUE).forEach(cat=>{
     CATALOGUE[cat].forEach((item, idx)=>{
-      const q = parseInt(document.getElementById(itemId(cat, idx)).value, 10) || 0;
+      const id = itemId(cat, idx);
+      const q = parseInt(document.getElementById(id).value, 10) || 0;
       if (q === 0) return;
 
       if (cat === "wines"){
         const comp = wineComplimentary(q);
         const totalReceived = q + comp;
+        const amount = q * item.price;
         items.push({
           cat, name:item.name, price:item.price, qty:q,
-          comp, totalReceived, lineTotal: q * item.price
+          comp, totalReceived, grossAmount: amount, lineTotal: amount
+        });
+      } else if (cat === "canapes"){
+        const foc = canapeFocState[id] || 0;
+        const chargeable = Math.max(0, q - foc);
+        items.push({
+          cat, name:item.name, price:item.price, qty:q,
+          foc, chargeable, grossAmount: q*item.price, lineTotal: chargeable*item.price
         });
       } else {
-        items.push({ cat, name:item.name, price:item.price, qty:q, lineTotal: q*item.price });
+        const amount = q * item.price;
+        items.push({ cat, name:item.name, price:item.price, qty:q, grossAmount: amount, lineTotal: amount });
       }
     });
   });
@@ -817,16 +978,11 @@ function collectItems(){
 function recalc(){
   updateBadges();
   const items = collectItems();
-  let rawSubtotal = items.reduce((s,i)=>s+i.lineTotal, 0);
+  const rawSubtotal = items.reduce((s,i)=>s+i.grossAmount, 0);
+  const subtotal = items.reduce((s,i)=>s+i.lineTotal, 0);
+  const discount = rawSubtotal - subtotal;
+  const focCount = items.filter(i=>i.cat==="canapes").reduce((s,i)=>s+(i.foc||0), 0);
 
-  // Complimentary canapé sets
-  const canapeSets = items.filter(i=>i.cat==="canapes").reduce((s,i)=>s+i.qty,0);
-  let freeSets = 0;
-  if (canapeSets >= 5) freeSets = 2;
-  else if (canapeSets >= 3) freeSets = 1;
-  const discount = freeSets * 250;
-
-  const subtotal = rawSubtotal - discount;
   const service = subtotal * 0.10;
   const afterService = subtotal + service;
   const gst = afterService * 0.09;
@@ -834,9 +990,9 @@ function recalc(){
 
   document.getElementById("sSubtotal").textContent = fmt(rawSubtotal);
   const discountRow = document.getElementById("sDiscountRow");
-  if (freeSets > 0){
+  if (focCount > 0){
     discountRow.style.display = "flex";
-    document.getElementById("sDiscountLabel").textContent = `Complimentary canapé sets (–${freeSets})`;
+    document.getElementById("sDiscountLabel").textContent = `Complimentary canapé sets (–${focCount})`;
     document.getElementById("sDiscountValue").textContent = "–" + fmt(discount);
   } else {
     discountRow.style.display = "none";
@@ -846,7 +1002,9 @@ function recalc(){
   document.getElementById("sGst").textContent = fmt(gst);
   document.getElementById("sGrand").textContent = fmt(grand);
 
-  return { items, rawSubtotal, freeSets, discount, subtotal, service, afterService, gst, grand };
+  updateCanapeCapacityStatus();
+
+  return { items, rawSubtotal, freeSets: focCount, discount, subtotal, service, afterService, gst, grand };
 }
 
 /* ---------------- Banner ---------------- */
@@ -1040,6 +1198,8 @@ function printRecord(rec){
     const tr = document.createElement("tr");
     const nameCell = (it.cat === "wines" && it.comp > 0)
       ? `${it.name}<br><span style="font-size:11px;color:#6B5F57;font-style:italic;">Complimentary: ${it.comp} bottle${it.comp>1?"s":""} · ${it.totalReceived} bottles total, charged for ${it.qty}</span>`
+      : (it.cat === "canapes" && it.foc > 0)
+      ? `${it.name}<br><span style="font-size:11px;color:#6B5F57;font-style:italic;">Complimentary: ${it.foc} set${it.foc>1?"s":""} · charged for ${it.chargeable}</span>`
       : it.name;
     const qtyCell = it.qty;
     tr.innerHTML = `<td>${nameCell}</td><td>${qtyCell}</td><td class="r">${fmt(it.price)}</td><td class="r">${fmt(it.lineTotal)}</td>`;
@@ -1085,6 +1245,8 @@ function newOrder(){
   document.getElementById("weddingDate").value = "";
   document.getElementById("refPreview").textContent = "1H-XXXXXX";
   document.querySelectorAll("[data-qty]").forEach(inp=>{ inp.value = 0; inp.dispatchEvent(new Event("input")); });
+  Object.keys(canapeFocState).forEach(id => canapeFocState[id] = 0);
+  refreshAllCanapeVisuals();
   recalc();
   showBanner("Started a new order.", "success");
 }
