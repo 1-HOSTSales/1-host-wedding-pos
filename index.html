@@ -864,28 +864,76 @@ function makeRef(){
   return "1H-" + d.getFullYear() + pad(d.getMonth()+1) + pad(d.getDate()) + "-" + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds());
 }
 
-/* ---------------- Storage (browser localStorage) ---------------- */
-// Persists saved orders in this browser, on this device. Works on any
-// static host (GitHub Pages, a local file, etc.) — no server required.
-const storage = {
-  async set(key, value){
-    try{ localStorage.setItem(key, value); return { key, value }; }
-    catch(e){ return null; }
-  },
-  async get(key){
-    const value = localStorage.getItem(key);
-    if (value === null) throw new Error("Key not found: " + key);
-    return { key, value };
-  },
-  async delete(key){
-    localStorage.removeItem(key);
-    return { key, deleted:true };
-  },
-  async list(prefix){
-    const keys = Object.keys(localStorage).filter(k => k.startsWith(prefix));
-    return { keys };
-  }
-};
+/* ---------------- Storage (Supabase) ---------------- */
+// Orders are stored in a shared Supabase table so every device/browser
+// sees the same saved-order list (not just the device that saved it).
+const SUPABASE_URL = "https://jwgrxjzlmpiyuswjrqqe.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp3Z3J4anpsbXBpeXVzd2pycXFlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyNzUwODcsImV4cCI6MjEwNDg1MTA4N30.x1_iDtvZVXNXX9MA_UdMb8t6ZCziqsw0iMCpqyEV_ec";
+
+function supabaseHeaders(extra){
+  return Object.assign({
+    "apikey": SUPABASE_ANON_KEY,
+    "Authorization": "Bearer " + SUPABASE_ANON_KEY,
+    "Content-Type": "application/json"
+  }, extra || {});
+}
+
+async function insertOrder(record){
+  const res = await fetch(SUPABASE_URL + "/rest/v1/orders", {
+    method: "POST",
+    headers: supabaseHeaders({ "Prefer": "return=minimal" }),
+    body: JSON.stringify([{
+      ref: record.ref,
+      couple: record.couple,
+      venue: record.venue,
+      wedding_date: record.weddingDate || null,
+      items: record.items,
+      raw_subtotal: record.rawSubtotal,
+      free_sets: record.freeSets,
+      discount: record.discount,
+      subtotal: record.subtotal,
+      service: record.service,
+      after_service: record.afterService,
+      gst: record.gst,
+      grand: record.grand
+    }])
+  });
+  if (!res.ok) throw new Error("Insert failed: " + res.status);
+  return true;
+}
+
+async function fetchOrders(){
+  const res = await fetch(SUPABASE_URL + "/rest/v1/orders?select=*&order=saved_at.desc", {
+    headers: supabaseHeaders()
+  });
+  if (!res.ok) throw new Error("Fetch failed: " + res.status);
+  const rows = await res.json();
+  return rows.map(row => ({
+    ref: row.ref,
+    couple: row.couple,
+    venue: row.venue,
+    weddingDate: row.wedding_date,
+    items: row.items,
+    rawSubtotal: Number(row.raw_subtotal),
+    freeSets: row.free_sets,
+    discount: Number(row.discount),
+    subtotal: Number(row.subtotal),
+    service: Number(row.service),
+    afterService: Number(row.after_service),
+    gst: Number(row.gst),
+    grand: Number(row.grand),
+    savedAt: row.saved_at
+  }));
+}
+
+async function deleteOrderByRef(ref){
+  const res = await fetch(SUPABASE_URL + "/rest/v1/orders?ref=eq." + encodeURIComponent(ref), {
+    method: "DELETE",
+    headers: supabaseHeaders()
+  });
+  if (!res.ok) throw new Error("Delete failed: " + res.status);
+  return true;
+}
 
 /* ---------------- Save / History ---------------- */
 async function saveOrder(){
@@ -909,13 +957,11 @@ async function saveOrder(){
     service: calc.service,
     afterService: calc.afterService,
     gst: calc.gst,
-    grand: calc.grand,
-    savedAt: new Date().toISOString()
+    grand: calc.grand
   };
 
   try{
-    const result = await storage.set("order:" + ref, JSON.stringify(record));
-    if (!result){ showBanner("Could not save the order — please try again.", "error"); return; }
+    await insertOrder(record);
     showBanner(`Order ${ref} saved for ${couple}.`, "success");
     document.getElementById("refPreview").textContent = ref;
     await loadHistory();
@@ -928,20 +974,11 @@ async function loadHistory(){
   const wrap = document.getElementById("historyWrap");
   wrap.innerHTML = '<div class="empty-note">Loading saved orders…</div>';
   try{
-    const listRes = await storage.list("order:");
-    const keys = (listRes && listRes.keys) ? listRes.keys : [];
-    if (keys.length === 0){
+    const records = await fetchOrders();
+    if (records.length === 0){
       wrap.innerHTML = '<div class="empty-note">No orders saved yet — orders you save will appear here for billing.</div>';
       return;
     }
-    const records = [];
-    for (const k of keys){
-      try{
-        const r = await storage.get(k);
-        if (r && r.value) records.push(JSON.parse(r.value));
-      }catch(e){ /* skip unreadable key */ }
-    }
-    records.sort((a,b)=> new Date(b.savedAt) - new Date(a.savedAt));
 
     const table = document.createElement("table");
     table.className = "history";
@@ -978,7 +1015,7 @@ async function loadHistory(){
     tbody.querySelectorAll('[data-act="del"]').forEach(btn=>{
       btn.addEventListener("click", async ()=>{
         try{
-          await storage.delete("order:" + btn.dataset.ref);
+          await deleteOrderByRef(btn.dataset.ref);
           showBanner(`Order ${btn.dataset.ref} deleted.`, "success");
           await loadHistory();
         }catch(e){ showBanner("Could not delete this order.", "error"); }
