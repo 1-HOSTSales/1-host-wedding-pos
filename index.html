@@ -733,7 +733,32 @@
         <div class="sum-row"><span class="label">Subtotal incl. Service Charge</span><span class="value" id="sAfterService">$0.00</span></div>
         <div class="sum-row"><span class="label">GST (9%)</span><span class="value" id="sGst">$0.00</span></div>
         <div class="sum-row grand"><span class="label">Grand Total</span><span class="value" id="sGrand">$0.00</span></div>
+      </div>
 
+      <div class="card summary-card" id="livePaymentCard">
+        <h2>Payment</h2>
+        <div class="summary-sub">Record how the couple is paying — split across multiple cards if needed.</div>
+
+        <div class="pay-list" id="livePayList">
+          <div class="empty-note" style="padding:10px 0;">No payments recorded yet.</div>
+        </div>
+        <div class="pay-add">
+          <select id="livePayType">
+            <option>VISA</option>
+            <option>Mastercard</option>
+            <option>AMEX</option>
+            <option>Bank Transfer</option>
+            <option>PayNow</option>
+            <option>Cash</option>
+            <option>Other</option>
+          </select>
+          <input type="number" id="livePayAmount" placeholder="Amount" min="0" step="0.01">
+          <button class="btn" id="btnAddLivePayment" style="width:auto;">Add</button>
+        </div>
+        <div class="pay-totals" id="livePayTotals"></div>
+      </div>
+
+      <div class="card summary-card">
         <button class="btn" id="btnSave">Save Order</button>
         <button class="btn secondary" id="btnPrint">Print / Bill Invoice</button>
         <button class="btn ghost" id="btnNew">Start New Order</button>
@@ -1234,8 +1259,50 @@ function recalc(){
 
   updateCanapeCapacityStatus();
   updateWineCapacityStatus();
+  renderLivePayments(grand);
 
   return { items, rawSubtotal, freeSets: canapeFocCount, freeBottles: wineFocCount, discount: focValue, subtotal, service, afterService, gst, grand };
+}
+
+/* ---------------- Live payment (current order, pre-save) ---------------- */
+let currentPayments = [];
+function renderLivePayments(grandTotal){
+  const list = document.getElementById("livePayList");
+  if (currentPayments.length === 0){
+    list.innerHTML = '<div class="empty-note" style="padding:10px 0;">No payments recorded yet.</div>';
+  } else {
+    list.innerHTML = currentPayments.map((p, idx)=>`
+      <div class="pay-row">
+        <span><span class="pay-type">${p.type}</span> — ${fmt(Number(p.amount))}</span>
+        <button class="pay-remove" data-idx="${idx}">Remove</button>
+      </div>
+    `).join("");
+    list.querySelectorAll(".pay-remove").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        currentPayments.splice(Number(btn.dataset.idx), 1);
+        recalc();
+      });
+    });
+  }
+
+  const paid = currentPayments.reduce((s,p)=> s + Number(p.amount || 0), 0);
+  const bal = Math.round((grandTotal - paid) * 100) / 100;
+  document.getElementById("livePayTotals").innerHTML = `
+    <div class="row"><span>Grand Total</span><span>${fmt(grandTotal)}</span></div>
+    <div class="row"><span>Total Paid</span><span>${fmt(paid)}</span></div>
+    <div class="row balance ${bal > 0.004 ? "due" : "clear"}">
+      <span>${bal > 0.004 ? "Balance Outstanding" : "Fully Paid"}</span>
+      <span>${bal > 0.004 ? fmt(bal) : fmt(0)}</span>
+    </div>
+  `;
+}
+function addLivePayment(){
+  const type = document.getElementById("livePayType").value;
+  const amount = parseFloat(document.getElementById("livePayAmount").value);
+  if (!amount || amount <= 0){ showBanner("Enter a valid payment amount.", "error"); return; }
+  currentPayments.push({ type, amount, date: new Date().toISOString() });
+  document.getElementById("livePayAmount").value = "";
+  recalc();
 }
 
 /* ---------------- Banner ---------------- */
@@ -1285,7 +1352,7 @@ async function insertOrder(record){
       after_service: record.afterService,
       gst: record.gst,
       grand: record.grand,
-      payments: [],
+      payments: record.payments || [],
       email: null
     }])
   });
@@ -1361,7 +1428,8 @@ async function saveOrder(){
     service: calc.service,
     afterService: calc.afterService,
     gst: calc.gst,
-    grand: calc.grand
+    grand: calc.grand,
+    payments: currentPayments
   };
 
   try{
@@ -1732,6 +1800,7 @@ function newOrder(){
   document.querySelectorAll("[data-qty]").forEach(inp=>{ inp.value = 0; inp.dispatchEvent(new Event("input")); });
   Object.keys(canapeFocState).forEach(id => canapeFocState[id] = 0);
   Object.keys(wineFocState).forEach(id => wineFocState[id] = 0);
+  currentPayments = [];
   refreshAllCanapeVisuals();
   refreshAllWineVisuals();
   recalc();
@@ -1742,6 +1811,7 @@ function newOrder(){
 document.getElementById("btnSave").addEventListener("click", saveOrder);
 document.getElementById("btnPrint").addEventListener("click", printCurrentOrder);
 document.getElementById("btnNew").addEventListener("click", newOrder);
+document.getElementById("btnAddLivePayment").addEventListener("click", addLivePayment);
 
 document.getElementById("btnAddPayment").addEventListener("click", addPayment);
 document.querySelector('[data-close="pay"]').addEventListener("click", closePayModal);
