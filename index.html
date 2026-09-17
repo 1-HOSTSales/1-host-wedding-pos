@@ -531,6 +531,78 @@
     font-size:15px;
     color:#8B4E49;
   }
+
+  /* ---------------- Modal ---------------- */
+  .modal-backdrop{
+    display:none; position:fixed; inset:0; background:rgba(46,38,33,0.45);
+    z-index:50; align-items:center; justify-content:center; padding:20px;
+  }
+  .modal-backdrop.show{display:flex;}
+  .modal-box{
+    background:var(--paper); border-radius:14px; max-width:520px; width:100%;
+    max-height:88vh; overflow-y:auto; padding:24px 26px; box-shadow:0 18px 50px rgba(0,0,0,0.25);
+  }
+  .modal-box h3{
+    font-family:'Cormorant Garamond', serif; font-size:22px; color:var(--rose-deep); margin:0 0 4px;
+  }
+  .modal-sub{color:var(--ink-soft); font-size:13px; margin-bottom:16px;}
+  .modal-close{
+    float:right; background:none; border:none; font-size:20px; color:var(--ink-soft); cursor:pointer; line-height:1;
+  }
+  .pay-list{margin:10px 0 16px; border-top:1px solid var(--line-soft);}
+  .pay-row{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:9px 0; border-bottom:1px solid var(--line-soft); font-size:14px;
+  }
+  .pay-row .pay-type{font-weight:500;}
+  .pay-row .pay-remove{
+    background:none; border:none; color:#C7574A; cursor:pointer; font-size:12px; margin-left:10px;
+  }
+  .pay-add{display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap;}
+  .pay-add select, .pay-add input{
+    padding:9px 10px; border:1px solid var(--line); border-radius:8px; font-family:'Jost',sans-serif; font-size:14px;
+  }
+  .pay-add select{flex:1; min-width:140px;}
+  .pay-add input{width:110px;}
+  .pay-add .btn{padding:9px 16px; font-size:13px; width:auto;}
+  .pay-totals{border-top:1px solid var(--line); padding-top:12px; font-size:14px;}
+  .pay-totals .row{display:flex; justify-content:space-between; padding:3px 0;}
+  .pay-totals .balance{font-weight:600; font-size:16px; padding-top:8px; margin-top:6px; border-top:1px dashed var(--line);}
+  .pay-totals .balance.due{color:#C7574A;}
+  .pay-totals .balance.clear{color:var(--good);}
+  .status-pill{
+    display:inline-block; padding:2px 9px; border-radius:20px; font-size:11px; font-weight:600; letter-spacing:.02em;
+  }
+  .status-pill.paid{background:#EBF1E8; color:#3E5C3B;}
+  .status-pill.partial{background:#FBF1DE; color:#8A6414;}
+  .status-pill.unpaid{background:#F7E7E3; color:#95352A;}
+  .email-field{width:100%; margin-bottom:14px;}
+  .email-field label{display:block; font-size:12px; color:var(--ink-soft); margin-bottom:5px;}
+  .email-field input{
+    width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font-family:'Jost',sans-serif; font-size:14px;
+  }
+
+  /* ---------------- Reports ---------------- */
+  .report-filters{display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:16px;}
+  .report-filters .field{min-width:150px;}
+  .report-filters .field label{display:block; font-size:12px; color:var(--ink-soft); margin-bottom:5px;}
+  .report-filters select, .report-filters input{
+    padding:9px 10px; border:1px solid var(--line); border-radius:8px; font-family:'Jost',sans-serif; font-size:14px; width:100%;
+  }
+  .report-filters .btn{width:auto; padding:10px 20px;}
+  .report-tabs{display:flex; gap:6px; margin-bottom:16px; flex-wrap:wrap;}
+  .report-tab{
+    padding:8px 16px; border-radius:20px; border:1px solid var(--line); background:var(--paper);
+    font-family:'Jost',sans-serif; font-size:13px; cursor:pointer; color:var(--ink-soft);
+  }
+  .report-tab.active{background:var(--rose); color:#fff; border-color:var(--rose);}
+  .report-kpis{display:flex; gap:14px; flex-wrap:wrap; margin-bottom:18px;}
+  .kpi-box{
+    background:var(--cream); border:1px solid var(--line-soft); border-radius:12px;
+    padding:14px 18px; min-width:150px; flex:1;
+  }
+  .kpi-box .kpi-label{font-size:12px; color:var(--ink-soft); margin-bottom:4px;}
+  .kpi-box .kpi-value{font-family:'Cormorant Garamond', serif; font-size:26px; font-weight:600; color:var(--rose-deep);}
 </style>
 </head>
 <body>
@@ -678,6 +750,83 @@
     </div>
   </div>
 
+  <div class="card history-card" id="reportsCard">
+    <h3>Reports</h3>
+    <div class="report-filters">
+      <div class="field">
+        <label for="rptVenue">Venue</label>
+        <select id="rptVenue">
+          <option value="">All venues</option>
+          <option>Monti</option>
+          <option>The Garage</option>
+          <option>The Summerhouse</option>
+          <option>1-Altitude Coast</option>
+          <option>1-Atico</option>
+          <option>1-Arden</option>
+          <option>The Riverhouse</option>
+          <option>The Alkaff Mansion</option>
+          <option>1-Flowerhill</option>
+          <option>1-Alfaro</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="rptFrom">Wedding date from</label>
+        <input type="date" id="rptFrom">
+      </div>
+      <div class="field">
+        <label for="rptTo">Wedding date to</label>
+        <input type="date" id="rptTo">
+      </div>
+      <button class="btn" id="btnRunReport" style="width:auto;">Generate Report</button>
+    </div>
+    <div class="report-tabs">
+      <button class="report-tab active" data-report="overall">Overall Sales</button>
+      <button class="report-tab" data-report="split">Beverage vs Food</button>
+      <button class="report-tab" data-report="mix">Product Mix</button>
+    </div>
+    <div id="reportsWrap">
+      <div class="empty-note">Choose your filters and click Generate Report.</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- PAYMENT MODAL -->
+<div class="modal-backdrop" id="payModal">
+  <div class="modal-box">
+    <button class="modal-close" data-close="pay">&times;</button>
+    <h3>Record Payment</h3>
+    <div class="modal-sub" id="payModalSub"></div>
+    <div class="pay-list" id="payList"></div>
+    <div class="pay-add">
+      <select id="payType">
+        <option>VISA</option>
+        <option>Mastercard</option>
+        <option>AMEX</option>
+        <option>Bank Transfer</option>
+        <option>PayNow</option>
+        <option>Cash</option>
+        <option>Other</option>
+      </select>
+      <input type="number" id="payAmount" placeholder="Amount" min="0" step="0.01">
+      <button class="btn" id="btnAddPayment" style="width:auto;">Add</button>
+    </div>
+    <div class="pay-totals" id="payTotals"></div>
+  </div>
+</div>
+
+<!-- EMAIL MODAL -->
+<div class="modal-backdrop" id="emailModal">
+  <div class="modal-box">
+    <button class="modal-close" data-close="email">&times;</button>
+    <h3>Email Order Sheet</h3>
+    <div class="modal-sub" id="emailModalSub"></div>
+    <div class="email-field">
+      <label for="emailAddress">Couple's email address</label>
+      <input type="email" id="emailAddress" placeholder="e.g. alvin.grace@email.com">
+    </div>
+    <button class="btn" id="btnSendEmail">Send Order Sheet</button>
+  </div>
 </div>
 
 <!-- PRINT-ONLY INVOICE -->
@@ -1135,7 +1284,9 @@ async function insertOrder(record){
       service: record.service,
       after_service: record.afterService,
       gst: record.gst,
-      grand: record.grand
+      grand: record.grand,
+      payments: [],
+      email: null
     }])
   });
   if (!res.ok) throw new Error("Insert failed: " + res.status);
@@ -1162,6 +1313,9 @@ async function fetchOrders(){
     afterService: Number(row.after_service),
     gst: Number(row.gst),
     grand: Number(row.grand),
+    payments: row.payments || [],
+    email: row.email || "",
+    emailSentAt: row.email_sent_at || null,
     savedAt: row.saved_at
   }));
 }
@@ -1172,6 +1326,16 @@ async function deleteOrderByRef(ref){
     headers: supabaseHeaders()
   });
   if (!res.ok) throw new Error("Delete failed: " + res.status);
+  return true;
+}
+
+async function updateOrderByRef(ref, patch){
+  const res = await fetch(SUPABASE_URL + "/rest/v1/orders?ref=eq." + encodeURIComponent(ref), {
+    method: "PATCH",
+    headers: supabaseHeaders({ "Prefer": "return=minimal" }),
+    body: JSON.stringify(patch)
+  });
+  if (!res.ok) throw new Error("Update failed: " + res.status);
   return true;
 }
 
@@ -1224,22 +1388,27 @@ async function loadHistory(){
     table.className = "history";
     table.innerHTML = `
       <thead><tr>
-        <th>Ref</th><th>Couple</th><th>Venue</th><th>Wedding Date</th><th>Grand Total</th><th></th>
+        <th>Ref</th><th>Couple</th><th>Venue</th><th>Wedding Date</th><th>Grand Total</th><th>Status</th><th></th>
       </tr></thead>
       <tbody></tbody>
     `;
     const tbody = table.querySelector("tbody");
     records.forEach(rec=>{
       const tr = document.createElement("tr");
+      const paid = totalPaid(rec);
+      const st = paymentStatus(rec.grand, paid);
       tr.innerHTML = `
         <td>${rec.ref}</td>
         <td>${rec.couple}</td>
         <td>${rec.venue}</td>
         <td>${rec.weddingDate || "—"}</td>
         <td class="num">${fmt(rec.grand)}</td>
+        <td><span class="status-pill ${st.cls}">${st.label}</span></td>
         <td>
           <div class="row-actions">
             <button class="icon-btn" data-act="view" data-ref="${rec.ref}">View / Print</button>
+            <button class="icon-btn" data-act="pay" data-ref="${rec.ref}">Payment</button>
+            <button class="icon-btn" data-act="email" data-ref="${rec.ref}">Email</button>
             <button class="icon-btn danger" data-act="del" data-ref="${rec.ref}">Delete</button>
           </div>
         </td>
@@ -1248,9 +1417,16 @@ async function loadHistory(){
     });
     wrap.innerHTML = "";
     wrap.appendChild(table);
+    latestRecords = records;
 
     tbody.querySelectorAll('[data-act="view"]').forEach(btn=>{
       btn.addEventListener("click", ()=> printRecord(records.find(r=>r.ref===btn.dataset.ref)));
+    });
+    tbody.querySelectorAll('[data-act="pay"]').forEach(btn=>{
+      btn.addEventListener("click", ()=> openPayModal(btn.dataset.ref));
+    });
+    tbody.querySelectorAll('[data-act="email"]').forEach(btn=>{
+      btn.addEventListener("click", ()=> openEmailModal(btn.dataset.ref));
     });
     tbody.querySelectorAll('[data-act="del"]').forEach(btn=>{
       btn.addEventListener("click", async ()=>{
@@ -1264,6 +1440,227 @@ async function loadHistory(){
   }catch(e){
     wrap.innerHTML = '<div class="empty-note">Saved orders are unavailable right now.</div>';
   }
+}
+
+/* ---------------- Payments ---------------- */
+let latestRecords = [];
+const PAYMENT_TYPES = ["VISA","Mastercard","AMEX","Bank Transfer","PayNow","Cash","Other"];
+
+function totalPaid(rec){
+  return (rec.payments || []).reduce((s,p)=> s + Number(p.amount || 0), 0);
+}
+function paymentStatus(grand, paid){
+  const bal = Math.round((grand - paid) * 100) / 100;
+  if (paid <= 0) return { cls:"unpaid", label:"Unpaid" };
+  if (bal <= 0.004) return { cls:"paid", label:"Paid in full" };
+  return { cls:"partial", label:"Partial" };
+}
+
+let currentPayRef = null;
+function openPayModal(ref){
+  currentPayRef = ref;
+  renderPayModal();
+  document.getElementById("payModal").classList.add("show");
+}
+function closePayModal(){
+  document.getElementById("payModal").classList.remove("show");
+  document.getElementById("payAmount").value = "";
+  currentPayRef = null;
+}
+function renderPayModal(){
+  const rec = latestRecords.find(r=>r.ref===currentPayRef);
+  if (!rec) return;
+  document.getElementById("payModalSub").textContent = `${rec.couple} · ${rec.ref} · Grand Total ${fmt(rec.grand)}`;
+
+  const list = document.getElementById("payList");
+  const payments = rec.payments || [];
+  if (payments.length === 0){
+    list.innerHTML = '<div class="empty-note" style="padding:10px 0;">No payments recorded yet.</div>';
+  } else {
+    list.innerHTML = payments.map((p, idx)=>`
+      <div class="pay-row">
+        <span><span class="pay-type">${p.type}</span> — ${fmt(Number(p.amount))}</span>
+        <button class="pay-remove" data-idx="${idx}">Remove</button>
+      </div>
+    `).join("");
+    list.querySelectorAll(".pay-remove").forEach(btn=>{
+      btn.addEventListener("click", async ()=>{
+        const payments2 = (rec.payments || []).filter((_,i)=> i !== Number(btn.dataset.idx));
+        try{
+          await updateOrderByRef(rec.ref, { payments: payments2 });
+          rec.payments = payments2;
+          renderPayModal();
+          await loadHistory();
+        }catch(e){ showBanner("Could not remove payment.", "error"); }
+      });
+    });
+  }
+
+  const paid = totalPaid(rec);
+  const bal = Math.round((rec.grand - paid) * 100) / 100;
+  const st = paymentStatus(rec.grand, paid);
+  document.getElementById("payTotals").innerHTML = `
+    <div class="row"><span>Grand Total</span><span>${fmt(rec.grand)}</span></div>
+    <div class="row"><span>Total Paid</span><span>${fmt(paid)}</span></div>
+    <div class="row balance ${bal > 0.004 ? "due" : "clear"}">
+      <span>${bal > 0.004 ? "Balance Outstanding" : "Fully Paid"}</span>
+      <span>${bal > 0.004 ? fmt(bal) : fmt(0)}</span>
+    </div>
+  `;
+}
+async function addPayment(){
+  const rec = latestRecords.find(r=>r.ref===currentPayRef);
+  if (!rec) return;
+  const type = document.getElementById("payType").value;
+  const amount = parseFloat(document.getElementById("payAmount").value);
+  if (!amount || amount <= 0){ showBanner("Enter a valid payment amount.", "error"); return; }
+  const payments = [...(rec.payments || []), { type, amount, date: new Date().toISOString() }];
+  try{
+    await updateOrderByRef(rec.ref, { payments });
+    rec.payments = payments;
+    document.getElementById("payAmount").value = "";
+    renderPayModal();
+    await loadHistory();
+  }catch(e){ showBanner("Could not save payment.", "error"); }
+}
+
+/* ---------------- Email order sheet ---------------- */
+const EDGE_FUNCTION_URL = SUPABASE_URL + "/functions/v1/send-order-email";
+let currentEmailRef = null;
+function openEmailModal(ref){
+  currentEmailRef = ref;
+  const rec = latestRecords.find(r=>r.ref===ref);
+  document.getElementById("emailModalSub").textContent = `${rec.couple} · ${rec.ref}`;
+  document.getElementById("emailAddress").value = rec.email || "";
+  document.getElementById("emailModal").classList.add("show");
+}
+function closeEmailModal(){
+  document.getElementById("emailModal").classList.remove("show");
+  currentEmailRef = null;
+}
+async function sendOrderEmail(){
+  const rec = latestRecords.find(r=>r.ref===currentEmailRef);
+  const email = document.getElementById("emailAddress").value.trim();
+  if (!rec) return;
+  if (!email || !email.includes("@")){ showBanner("Enter a valid email address.", "error"); return; }
+  const btn = document.getElementById("btnSendEmail");
+  btn.disabled = true; btn.textContent = "Sending…";
+  try{
+    await updateOrderByRef(rec.ref, { email });
+    const res = await fetch(EDGE_FUNCTION_URL, {
+      method: "POST",
+      headers: supabaseHeaders(),
+      body: JSON.stringify({ ref: rec.ref, email, order: rec })
+    });
+    if (!res.ok) throw new Error("Send failed: " + res.status);
+    showBanner(`Order sheet emailed to ${email}.`, "success");
+    closeEmailModal();
+    await loadHistory();
+  }catch(e){
+    showBanner("Could not send the email — please check the mail service and try again.", "error");
+  }finally{
+    btn.disabled = false; btn.textContent = "Send Order Sheet";
+  }
+}
+
+/* ---------------- Reports ---------------- */
+let activeReport = "overall";
+function inDateRange(dateStr, from, to){
+  if (!dateStr) return !from && !to;
+  if (from && dateStr < from) return false;
+  if (to && dateStr > to) return false;
+  return true;
+}
+async function runReport(){
+  const wrap = document.getElementById("reportsWrap");
+  wrap.innerHTML = '<div class="empty-note">Loading…</div>';
+  try{
+    const all = await fetchOrders();
+    const venue = document.getElementById("rptVenue").value;
+    const from = document.getElementById("rptFrom").value;
+    const to = document.getElementById("rptTo").value;
+    const filtered = all.filter(r=>
+      (!venue || r.venue === venue) && inDateRange(r.weddingDate, from, to)
+    );
+    renderReport(filtered);
+  }catch(e){
+    wrap.innerHTML = '<div class="empty-note">Reports are unavailable right now.</div>';
+  }
+}
+function renderReport(records){
+  const wrap = document.getElementById("reportsWrap");
+  if (records.length === 0){
+    wrap.innerHTML = '<div class="empty-note">No orders match these filters.</div>';
+    return;
+  }
+  if (activeReport === "overall") wrap.innerHTML = renderOverallReport(records);
+  else if (activeReport === "split") wrap.innerHTML = renderSplitReport(records);
+  else wrap.innerHTML = renderMixReport(records);
+}
+function renderOverallReport(records){
+  const grand = records.reduce((s,r)=>s+r.grand,0);
+  const subtotal = records.reduce((s,r)=>s+r.rawSubtotal,0);
+  const service = records.reduce((s,r)=>s+r.service,0);
+  const gst = records.reduce((s,r)=>s+r.gst,0);
+  const paid = records.reduce((s,r)=>s+totalPaid(r),0);
+  const outstanding = grand - paid;
+  return `
+    <div class="report-kpis">
+      <div class="kpi-box"><div class="kpi-label">Orders</div><div class="kpi-value">${records.length}</div></div>
+      <div class="kpi-box"><div class="kpi-label">Grand Total Revenue</div><div class="kpi-value">${fmt(grand)}</div></div>
+      <div class="kpi-box"><div class="kpi-label">Collected</div><div class="kpi-value">${fmt(paid)}</div></div>
+      <div class="kpi-box"><div class="kpi-label">Outstanding</div><div class="kpi-value">${fmt(outstanding)}</div></div>
+    </div>
+    <table class="history">
+      <thead><tr><th>Subtotal</th><th>Service Charge</th><th>GST</th><th>Grand Total</th></tr></thead>
+      <tbody><tr><td>${fmt(subtotal)}</td><td>${fmt(service)}</td><td>${fmt(gst)}</td><td>${fmt(grand)}</td></tr></tbody>
+    </table>
+  `;
+}
+const BEVERAGE_CATS = ["wines","cocktail"];
+const FOOD_CATS = ["live_stations","canapes"];
+function renderSplitReport(records){
+  let bev = 0, food = 0;
+  records.forEach(r=>{
+    r.items.forEach(it=>{
+      if (BEVERAGE_CATS.includes(it.cat)) bev += it.lineTotal;
+      else if (FOOD_CATS.includes(it.cat)) food += it.lineTotal;
+    });
+  });
+  const total = bev + food || 1;
+  return `
+    <div class="report-kpis">
+      <div class="kpi-box"><div class="kpi-label">Beverage Sales</div><div class="kpi-value">${fmt(bev)}</div></div>
+      <div class="kpi-box"><div class="kpi-label">Food Sales</div><div class="kpi-value">${fmt(food)}</div></div>
+    </div>
+    <table class="history">
+      <thead><tr><th>Category</th><th>Revenue</th><th>Share</th></tr></thead>
+      <tbody>
+        <tr><td>Beverage (Wines + Cocktail)</td><td>${fmt(bev)}</td><td>${Math.round(bev/total*100)}%</td></tr>
+        <tr><td>Food (Live Stations + Canapés)</td><td>${fmt(food)}</td><td>${Math.round(food/total*100)}%</td></tr>
+      </tbody>
+    </table>
+  `;
+}
+function renderMixReport(records){
+  const mix = {};
+  records.forEach(r=>{
+    r.items.forEach(it=>{
+      if (!mix[it.name]) mix[it.name] = { qty:0, foc:0, revenue:0, cat:it.cat };
+      mix[it.name].qty += it.qty;
+      mix[it.name].foc += (it.foc || 0);
+      mix[it.name].revenue += it.lineTotal;
+    });
+  });
+  const rows = Object.entries(mix).sort((a,b)=> b[1].revenue - a[1].revenue);
+  return `
+    <table class="history">
+      <thead><tr><th>Item</th><th>Qty Sold</th><th>Complimentary</th><th>Revenue</th></tr></thead>
+      <tbody>
+        ${rows.map(([name,d])=>`<tr><td>${name}</td><td class="num">${d.qty}</td><td class="num">${d.foc || "—"}</td><td class="num">${fmt(d.revenue)}</td></tr>`).join("")}
+      </tbody>
+    </table>
+  `;
 }
 
 /* ---------------- Print invoice ---------------- */
@@ -1345,6 +1742,24 @@ function newOrder(){
 document.getElementById("btnSave").addEventListener("click", saveOrder);
 document.getElementById("btnPrint").addEventListener("click", printCurrentOrder);
 document.getElementById("btnNew").addEventListener("click", newOrder);
+
+document.getElementById("btnAddPayment").addEventListener("click", addPayment);
+document.querySelector('[data-close="pay"]').addEventListener("click", closePayModal);
+document.getElementById("payModal").addEventListener("click", e=>{ if (e.target.id === "payModal") closePayModal(); });
+
+document.getElementById("btnSendEmail").addEventListener("click", sendOrderEmail);
+document.querySelector('[data-close="email"]').addEventListener("click", closeEmailModal);
+document.getElementById("emailModal").addEventListener("click", e=>{ if (e.target.id === "emailModal") closeEmailModal(); });
+
+document.getElementById("btnRunReport").addEventListener("click", runReport);
+document.querySelectorAll(".report-tab").forEach(tab=>{
+  tab.addEventListener("click", ()=>{
+    document.querySelectorAll(".report-tab").forEach(t=>t.classList.remove("active"));
+    tab.classList.add("active");
+    activeReport = tab.dataset.report;
+    runReport();
+  });
+});
 
 recalc();
 loadHistory();
